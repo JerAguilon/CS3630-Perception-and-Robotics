@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 ##############
-#### Your name:
+#### Your name: Jeremy Aguilon
 ##############
 
 import numpy as np
