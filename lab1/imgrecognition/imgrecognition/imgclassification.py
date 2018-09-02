@@ -41,13 +41,7 @@ class ImageClassifier:
         ######## YOUR CODE HERE
         ########################
         feature_data = []
-
-        for i in data:
-            i = color.rgb2gray((filters.gaussian(
-                exposure.equalize_hist(
-                    color.rgb2gray(i)
-                )
-            )))
+        for i in self._preprocess(data):
             new_features = feature.hog(
                 i,
                 orientations=32,
@@ -60,6 +54,16 @@ class ImageClassifier:
 
         # Please do not modify the return type below
         return(feature_data)
+
+    def _preprocess(self, data):
+        return [
+            color.rgb2gray((filters.gaussian(
+                exposure.equalize_hist(
+                    color.rgb2gray(i)
+                )
+            )))
+            for i in data
+        ]
 
     def train_classifier(self, train_data, train_labels):
         # Please do not modify the header above
