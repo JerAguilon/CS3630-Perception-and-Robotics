@@ -42,6 +42,7 @@ class ImageClassifier:
         ########################
         feature_data = []
         for i in self._preprocess(data):
+            # Params found via an ad-hoc grid search
             new_features = feature.hog(
                 i,
                 orientations=32,
