@@ -45,10 +45,10 @@ class ImageClassifier:
             # Params found via an ad-hoc grid search
             new_features = feature.hog(
                 i,
-                orientations=32,
-                pixels_per_cell=(24, 24),
+                block_norm='L2-Hys',
                 cells_per_block=(8, 8),
-                block_norm='L2-Hys'
+                orientations=24,
+                pixels_per_cell=(24, 24),
             )
             feature_data.append(new_features)
 
