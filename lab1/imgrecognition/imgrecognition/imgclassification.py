@@ -97,7 +97,7 @@ def main():
 
     # load images
     (train_raw, train_labels) = img_clf.load_data_from_folder('./train/')
-    (test_raw, test_labels) = img_clf.load_data_from_folder('./test/')
+    (test_raw, test_labels) = img_clf.load_data_from_folder('./test2/out/')
 
     # convert images into features
     train_data = img_clf.extract_image_features(train_raw)
@@ -114,6 +114,7 @@ def main():
 
     # test model
     predicted_labels = img_clf.predict_labels(test_data)
+    print("TEST 2 :)")
     print("\nTraining results")
     print("=============================")
     print("Confusion Matrix:\n",metrics.confusion_matrix(test_labels, predicted_labels))
