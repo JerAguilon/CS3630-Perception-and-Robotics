@@ -2,6 +2,9 @@ from grid import *
 from particle import Particle
 from utils import *
 from setting import *
+
+from bisect import bisect_left
+
 import numpy as np
 
 
@@ -33,9 +36,25 @@ def motion_update(particles, odom):
     return motion_particles
 
 class ParticleWeight(object):
-    def __init__(particle, weight):
+    def __init__(self, particle, weight):
         self.particle = particle
         self.weight = weight
+
+    def __str__(self):
+        return "Particle: ({}, {}, {}), Weight: {}".format(
+            self.particle.x,
+            self.particle.y,
+            self.particle.z,
+            self.weight,
+        )
+
+    def __repr__(self):
+        return "Particle: ({}, {}, {}), Weight: {}".format(
+            self.particle.x,
+            self.particle.y,
+            self.particle.h,
+            self.weight,
+        )
 
 # ------------------------------------------------------------------------
 def measurement_update(particles, measured_marker_list, grid):
@@ -62,45 +81,90 @@ def measurement_update(particles, measured_marker_list, grid):
         Returns: the list of particles represents belief p(x_{t} | u_{t})
                 after measurement update
     """
-    particle_weights = []
-    particle_count = 0
-
     if len(measured_marker_list) == 0:
-        for p in particles:
+        return particles
+
+    particle_weights = []
+
+    for p in particles:
+        if grid.is_free(p.x, p.y):
+            if len(measured_marker_list) > 0:
+                particle_markers = p.read_markers(grid)
+                particle_weights.append(
+                    get_particle_weight(
+                        measured_marker_list=measured_marker_list,
+                        particle_marker_list=particle_markers,
+                        particle=p,
+                    )
+                )
+            else:
+                particle_weights.append(
+                    ParticleWeight(particle=p, weight=1)
+                )
+        else:
             particle_weights.append(
-                ParticleWeight(particle=p, weight=1/len(particles))
+                ParticleWeight(particle=p, weight=0)
             )
+
+    total_weight = sum([p.weight for p in particle_weights])
+    mu = total_weight / len(particle_weights)
+    count_positive = sum(1 for p in particle_weights if p.weight > 0)
+    if count_positive > 0:
+        mu = (mu / count_positive) * len(particles)
+
+    if mu > 0:
+        for pw in particle_weights:
+            pw.weight = pw.weight / mu
+
+    particle_weight_cdf = []
+    curr_total = 0
+    for pw in particle_weights:
+        curr_total += pw.weight
+        particle_weight_cdf.append(curr_total)
+
+    measured_particles = []
+    for i in range(len(particles)):
+        curr_particle = generate_particle_from_dist(particle_weights, particle_weight_cdf, grid)
+        if curr_particle:
+            measured_particles.append(Particle(curr_particle[0], curr_particle[1], curr_particle[2]))
+    return measured_particles
+
+def generate_particle_from_dist(particle_weights, particle_weight_cdf, grid):
+    bound = np.random.uniform() # [0, 1) uniform dist
+    rand_index = bisect_left(particle_weight_cdf, bound)
+    if 0 <= rand_index < len(particle_weights):
+        return particle_weights[rand_index].particle
     else:
-        for p in particles:
-            if (not (0 <= p.x < grid.width)) or (not (0 <= p.y < grid.height)):
-                weight.append(ParticleWeight(particle=p, weight=0))
-                continue
-            # TODO(do we care about occupied?)
+        rand_particle = Particle.create_random(1, grid)[0]
+        return (rand_particle.x, rand_particle.y, rand_particle.h)
 
-            curr_markers = p.read_markers(grid)
-            diff = abs(len(curr_markers) - len(measured_marker_list))
-            matches = recurse(curr_markers, measured_marker_list)
+def get_particle_weight(measured_marker_list, particle_marker_list, particle):
+    if len(measured_marker_list) == 0 or len(particle_marker_list) == 0:
+        return ParticleWeight(particle, 0)
 
-def recurse(curr_list, measured_marker_list, i=0, matches={}):
-    if len(curr_list) == 0:
-        return matches
+    i_measured_list = 0
 
-    curr_marker = measured_marker_list[i]
+    matched = {}
+    while i_measured_list < len(measured_marker_list) and len(particle_marker_list) > 0:
 
-    # Tuple of (x, y, h)
-    marker_measurement = add_marker_measurement_noise(
-        curr_marker,
-        MARKER_TRANS_SIGMA,
-        MARKER_ROT_SIGMA,
-    )
+        marker_measurement = measured_marker_list[i_measured_list]
 
-    # Compute cloesst particle
-    def distance_cmp(particle):
-        return grid_distance(
-            marker_measurement[0], marker_measurement[1], particle[0], particle[1]
-        )
-    closest_particle = min(curr_list, key=lambda x: distance_cmp(x))
-    curr_list.remove(closet_particle)
+        def distance_cmp(particle):
+            return grid_distance(
+                marker_measurement[0], marker_measurement[1], particle[0], particle[1]
+            )
+        closest_particle = min(particle_marker_list, key=lambda x: distance_cmp(x))
 
-    matches[closest_particle] = curr_marker
-    return recurse(curr_list, measured_marker_list, i + 1, matches)
+        matched[marker_measurement] = closest_particle
+        particle_marker_list.remove(closest_particle)
+
+        i_measured_list += 1
+
+    weight = 1
+    for marker, particle in matched.items():
+        angle = diff_heading_deg(marker[2], particle[2])
+        dist = grid_distance(marker[0], marker[1], particle[0], particle[1])
+
+        a = (dist**2 + angle**2) / (-2 * MARKER_TRANS_SIGMA ** 2)
+        weight *= np.exp(a)
+    return ParticleWeight(particle, weight)
