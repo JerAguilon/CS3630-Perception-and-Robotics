@@ -8,6 +8,27 @@ from bisect import bisect_left
 import numpy as np
 
 
+class ParticleWeight(object):
+    def __init__(self, particle, weight):
+        self.particle = particle
+        self.weight = weight
+
+    def __str__(self):
+        return "Particle: ({}, {}, {}), Weight: {}".format(
+            self.particle.x,
+            self.particle.y,
+            self.particle.z,
+            self.weight,
+        )
+
+    def __repr__(self):
+        return "Particle: ({}, {}, {}), Weight: {}".format(
+            self.particle.x,
+            self.particle.y,
+            self.particle.h,
+            self.weight,
+        )
+
 def motion_update(particles, odom):
     """ Particle filter motion update
 
@@ -35,28 +56,6 @@ def motion_update(particles, odom):
         motion_particles.append(p)
     return motion_particles
 
-class ParticleWeight(object):
-    def __init__(self, particle, weight):
-        self.particle = particle
-        self.weight = weight
-
-    def __str__(self):
-        return "Particle: ({}, {}, {}), Weight: {}".format(
-            self.particle.x,
-            self.particle.y,
-            self.particle.z,
-            self.weight,
-        )
-
-    def __repr__(self):
-        return "Particle: ({}, {}, {}), Weight: {}".format(
-            self.particle.x,
-            self.particle.y,
-            self.particle.h,
-            self.weight,
-        )
-
-# ------------------------------------------------------------------------
 def measurement_update(particles, measured_marker_list, grid):
     """ Particle filter measurement update
 
