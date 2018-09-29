@@ -3,8 +3,6 @@ from particle import Particle
 from utils import *
 from setting import *
 
-from bisect import bisect_left
-
 import numpy as np
 
 
@@ -14,10 +12,11 @@ class ParticleWeight(object):
         self.weight = weight
 
     def __str__(self):
+        print(type(self.particle))
         return "Particle: ({}, {}, {}), Weight: {}".format(
             self.particle.x,
             self.particle.y,
-            self.particle.z,
+            self.particle.h,
             self.weight,
         )
 
@@ -110,10 +109,9 @@ def measurement_update(particles, measured_marker_list, grid):
     count_positive = sum(1 for p in particle_weights if p.weight > 0)
     if count_positive > 0:
         mu = (mu / count_positive) * len(particles)
-
     if mu > 0:
         for pw in particle_weights:
-            pw.weight = pw.weight / mu
+            pw.weight = pw.weight / total_weight
 
     particle_weight_cdf = []
     curr_total = 0
@@ -121,21 +119,20 @@ def measurement_update(particles, measured_marker_list, grid):
         curr_total += pw.weight
         particle_weight_cdf.append(curr_total)
 
-    measured_particles = []
-    for i in range(len(particles)):
-        curr_particle = generate_particle_from_dist(particle_weights, particle_weight_cdf, grid)
-        if curr_particle:
-            measured_particles.append(Particle(curr_particle[0], curr_particle[1], curr_particle[2]))
-    return measured_particles
 
-def generate_particle_from_dist(particle_weights, particle_weight_cdf, grid):
-    bound = np.random.uniform() # [0, 1) uniform dist
-    rand_index = bisect_left(particle_weight_cdf, bound)
-    if 0 <= rand_index < len(particle_weights):
-        return particle_weights[rand_index].particle
-    else:
-        rand_particle = Particle.create_random(1, grid)[0]
-        return (rand_particle.x, rand_particle.y, rand_particle.h)
+    count_zero = len(particle_weights) - count_positive
+    measured_particles = Particle.create_random(count_zero, grid)
+    if particle_weights != []:
+        pdf = [p.weight for p in particle_weights]
+        sample = np.random.choice(particle_weights, size=count_positive, p=pdf, replace=True)
+        for s in sample:
+            p = s.particle
+            measured_particles.append(
+                Particle(p.x, p.y, p.h)
+            )
+
+    assert len(measured_particles) == len(particles)
+    return measured_particles
 
 def get_particle_weight(measured_marker_list, particle_marker_list, particle):
     if len(measured_marker_list) == 0 or len(particle_marker_list) == 0:
@@ -143,8 +140,11 @@ def get_particle_weight(measured_marker_list, particle_marker_list, particle):
 
     i_measured_list = 0
 
-    matched = {}
-    while i_measured_list < len(measured_marker_list) and len(particle_marker_list) > 0:
+    matched = []
+
+    particle_set = set(particle_marker_list)
+
+    while i_measured_list < len(measured_marker_list) and len(particle_set) > 0:
 
         marker_measurement = measured_marker_list[i_measured_list]
 
@@ -154,16 +154,18 @@ def get_particle_weight(measured_marker_list, particle_marker_list, particle):
             )
         closest_particle = min(particle_marker_list, key=lambda x: distance_cmp(x))
 
-        matched[marker_measurement] = closest_particle
-        particle_marker_list.remove(closest_particle)
+        matched.append( (marker_measurement, closest_particle) )
+        if closest_particle in particle_set:
+            particle_set.remove(closest_particle)
 
         i_measured_list += 1
 
     weight = 1
-    for marker, particle in matched.items():
-        angle = diff_heading_deg(marker[2], particle[2])
-        dist = grid_distance(marker[0], marker[1], particle[0], particle[1])
+    for marker, closest_particle in matched:
+        angle = diff_heading_deg(marker[2], closest_particle[2])
+        dist = grid_distance(marker[0], marker[1], closest_particle[0], closest_particle[1])
 
-        a = (dist**2 + angle**2) / (-2 * MARKER_TRANS_SIGMA ** 2)
+        a = -((dist**2 / (2 * MARKER_TRANS_SIGMA ** 2)) + \
+              (angle**2 / (2 * MARKER_ROT_SIGMA ** 2)))
         weight *= np.exp(a)
     return ParticleWeight(particle, weight)

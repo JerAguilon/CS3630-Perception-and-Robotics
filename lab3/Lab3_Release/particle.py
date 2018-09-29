@@ -6,9 +6,6 @@ import math
 from utils import *
 from grid import *
 
-
-
-
 """ Particle class (base class for robot)
     A class for particle, each particle contains x, y, and heading information
 """
